@@ -1,0 +1,30 @@
+# Project-level Streamlit config (read when running `streamlit run` from the
+# repo root). Prototype parity: the app's only user-facing surface is the Build
+# page, so the auto-generated multipage sidebar navigation must never render.
+#
+# Disabling it here removes the nav at startup, which fixes the brief sidebar
+# *flash* on a fresh /build load that the page-level CSS could only hide *after*
+# first paint. The Build page CSS and the legacy-page prototype lock still hide
+# the sidebar/nav as defense in depth (so a page that ever opens the sidebar
+# directly stays covered).
+#
+# Navigation/presentation only — no backend, service, or page-layout change.
+[client]
+showSidebarNavigation = false
+
+# Native first-paint theme: the dark DK canvas the Build page draws lives in the
+# page-level ``st.markdown(_CSS)`` block, which is only delivered over the
+# websocket *after* the first paint — so Streamlit briefly paints its default
+# (light/auto) theme first, which reads as the old surface flashing before the
+# dark Build layout settles in. Declaring the same DK palette here bakes it into
+# the bootstrap, so the first visible paint is already the dark DK canvas and
+# the injected CSS only layers on the gradient / narrow column / custom chrome
+# (a dark→dark refinement, not a visible flash). Values mirror the Build page's
+# ``--tsb-*`` tokens: backgroundColor=--tsb-bg, secondaryBackgroundColor=
+# --tsb-panel, textColor=--tsb-txt, primaryColor=--tsb-accent. Presentation only.
+[theme]
+base = "dark"
+primaryColor = "#53d337"
+backgroundColor = "#0a0e0f"
+secondaryBackgroundColor = "#141a1d"
+textColor = "#f4f7f5"

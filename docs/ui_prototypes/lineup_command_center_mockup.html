@@ -1,0 +1,630 @@
+<!--
+  UFC DFS Lineup Optimizer — "Lineup Command Center" UI prototype
+  ============================================================
+  PROTOTYPE / MOCKUP ONLY. Fake data. Not wired to the database, repositories,
+  services, optimizer, or exports. Opening this file changes NOTHING in the
+  production app. It exists to evaluate a better visual workflow before any
+  Streamlit code is written.
+
+  How to view: open this file in any browser (no server, no build step,
+  no network — everything is inline).
+
+  Design intent: a command-center dashboard that answers, at a glance,
+  three questions the current 9-page Streamlit app makes the user hunt for:
+    1. Is this slate ready?
+    2. What is blocked / what needs review?
+    3. What is the single next action?
+
+  The status vocabulary (pass / warn / block / not-started, the workflow
+  order, the check codes, and the next-action precedence) intentionally
+  mirrors docs/HOME_DASHBOARD_UX_DESIGN.md and
+  docs/MANUAL_REVIEW_GATE_V1_DESIGN.md so this can be ported by *rendering*
+  the existing evaluate_manual_review() result — not by adding new logic.
+  See the "Porting to Streamlit" section at the bottom of the page.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lineup Command Center — prototype</title>
+<style>
+  :root {
+    --bg: #0c1018;
+    --bg-2: #121826;
+    --panel: #161d2e;
+    --panel-2: #1b2336;
+    --line: #263149;
+    --line-soft: #1f2940;
+    --txt: #e7ecf5;
+    --txt-dim: #9aa6be;
+    --txt-faint: #6b7790;
+    --accent: #4f8cff;
+    --accent-soft: #1b2c4d;
+    --ready: #34d399;
+    --ready-bg: #0f2e25;
+    --warn: #fbbf24;
+    --warn-bg: #2e2410;
+    --block: #f87171;
+    --block-bg: #2e1518;
+    --idle: #5b6680;
+    --idle-bg: #1a2030;
+    --shadow: 0 8px 30px rgba(0,0,0,.35);
+    --radius: 14px;
+    font-synthesis: none;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #15203a 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 0%, #161a2e 0%, transparent 55%),
+      var(--bg);
+    color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 64px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 22px; }
+
+  /* ---- prototype banner ---- */
+  .proto-banner {
+    background: repeating-linear-gradient(45deg, #2a1d3a, #2a1d3a 12px, #261a35 12px, #261a35 24px);
+    color: #d9c8f5; font-size: 12.5px; letter-spacing: .3px;
+    text-align: center; padding: 7px 12px; border-bottom: 1px solid #3a2a55;
+  }
+  .proto-banner b { color: #fff; }
+
+  /* ---- top bar ---- */
+  header.topbar {
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(8px);
+    background: linear-gradient(180deg, rgba(12,16,24,.92), rgba(12,16,24,.78));
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner { display: flex; align-items: center; gap: 18px; padding: 14px 22px; max-width: 1280px; margin: 0 auto; }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 16px; }
+  .brand .logo {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #7c4dff);
+    display: grid; place-items: center; font-size: 15px; color: #fff; font-weight: 800;
+    box-shadow: 0 4px 14px rgba(79,140,255,.4);
+  }
+  .brand small { display:block; font-weight: 500; font-size: 11px; color: var(--txt-faint); letter-spacing:.4px; }
+  .topbar-spacer { flex: 1; }
+
+  .slate-picker {
+    display: flex; align-items: center; gap: 9px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 7px 12px;
+  }
+  .slate-picker label { font-size: 11px; color: var(--txt-faint); text-transform: uppercase; letter-spacing: .6px; }
+  .slate-picker select {
+    background: transparent; color: var(--txt); border: none; font-size: 14px;
+    font-weight: 600; outline: none; cursor: pointer;
+  }
+  .slate-picker select option { background: var(--panel-2); }
+
+  .gate-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 13px; padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--line);
+  }
+  .gate-pill .dot { width: 9px; height: 9px; border-radius: 50%; }
+
+  /* ---- scenario switch (prototype affordance) ---- */
+  .scenario {
+    display: flex; gap: 6px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 4px;
+  }
+  .scenario button {
+    border: none; background: transparent; color: var(--txt-dim);
+    font-size: 12.5px; font-weight: 600; padding: 6px 11px; border-radius: 7px; cursor: pointer;
+    white-space: nowrap;
+  }
+  .scenario button.active { background: var(--accent-soft); color: #cfe0ff; box-shadow: inset 0 0 0 1px #2f4b80; }
+
+  /* ---- section scaffolding ---- */
+  .section-title {
+    display:flex; align-items:center; gap:10px;
+    font-size: 12.5px; text-transform: uppercase; letter-spacing: 1.1px;
+    color: var(--txt-faint); margin: 30px 2px 13px;
+  }
+  .section-title .rule { flex:1; height:1px; background: var(--line-soft); }
+
+  /* ---- next action hero ---- */
+  .hero {
+    margin-top: 22px;
+    display: grid; grid-template-columns: 1.55fr 1fr; gap: 18px;
+  }
+  .next-action {
+    position: relative; overflow: hidden;
+    background:
+      radial-gradient(600px 200px at 100% 0%, rgba(79,140,255,.18), transparent 70%),
+      var(--panel);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  .next-action .eyebrow { font-size: 11.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .next-action h1 { margin: 8px 0 6px; font-size: 27px; line-height: 1.15; letter-spacing: -.3px; }
+  .next-action p { margin: 0 0 18px; color: var(--txt-dim); font-size: 14.5px; max-width: 58ch; }
+  .next-action .cta-row { display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display:inline-flex; align-items:center; gap:8px;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: 14px;
+    padding: 11px 18px; border-radius: 10px; border: none; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(79,140,255,.35);
+  }
+  .btn.secondary { background: transparent; color: var(--txt); border: 1px solid var(--line); box-shadow:none; }
+  .next-action .why { margin-top: 14px; font-size: 12.5px; color: var(--txt-faint); }
+  .next-action .step-badge {
+    position:absolute; top: 18px; right: 20px; font-size: 12px; color: var(--txt-faint);
+    border:1px solid var(--line); border-radius:999px; padding:4px 11px;
+  }
+
+  /* ---- readiness gauge ---- */
+  .readiness {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 22px; box-shadow: var(--shadow); display:flex; flex-direction:column;
+  }
+  .readiness h3 { margin: 0 0 2px; font-size: 14px; }
+  .readiness .sub { font-size: 12px; color: var(--txt-faint); margin-bottom: 14px; }
+  .gauge { display:flex; align-items:center; gap: 18px; }
+  .ring { --p: 0; --c: var(--accent); width: 104px; height: 104px; flex: none; border-radius: 50%;
+    background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--line-soft) 0);
+    display:grid; place-items:center; position: relative;
+  }
+  .ring::after { content:""; position:absolute; inset: 10px; border-radius:50%; background: var(--panel); }
+  .ring .val { position: relative; z-index:1; font-weight: 800; font-size: 23px; }
+  .ring .val small { display:block; font-size: 10.5px; color: var(--txt-faint); font-weight:600; letter-spacing:.5px; }
+  .counts { display:flex; flex-direction:column; gap: 9px; flex:1; }
+  .count-row { display:flex; align-items:center; gap:10px; font-size:13.5px; }
+  .count-row .chip { width:22px; height:22px; border-radius:6px; display:grid; place-items:center; font-size:12px; font-weight:800; }
+  .count-row b { font-size: 15px; }
+  .count-row span { color: var(--txt-dim); }
+
+  /* ---- pipeline stepper ---- */
+  .pipeline {
+    display:grid; grid-template-columns: repeat(9, 1fr); gap: 8px;
+    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 14px; box-shadow: var(--shadow);
+  }
+  .pstep { text-align:center; position: relative; padding-top: 26px; }
+  .pstep .node {
+    position:absolute; top:0; left:50%; transform: translateX(-50%);
+    width: 26px; height:26px; border-radius:50%; display:grid; place-items:center;
+    font-size: 13px; font-weight: 800; border: 2px solid var(--line);
+    background: var(--idle-bg); color: var(--txt-faint);
+  }
+  .pstep::before { content:""; position:absolute; top:13px; left:-50%; width:100%; height:2px; background: var(--line-soft); z-index:-0; }
+  .pstep:first-child::before { display:none; }
+  .pstep .plabel { font-size: 11px; color: var(--txt-dim); line-height:1.25; }
+  .pstep .pnum { font-size: 9.5px; color: var(--txt-faint); letter-spacing:.5px; }
+  .pstep.s-ready .node { background: var(--ready-bg); border-color: var(--ready); color: var(--ready); }
+  .pstep.s-warn  .node { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+  .pstep.s-block .node { background: var(--block-bg); border-color: var(--block); color: var(--block); }
+  .pstep.s-idle  .node { background: var(--idle-bg); border-color: var(--line); color: var(--txt-faint); }
+  .pstep.s-ready .plabel, .pstep.s-warn .plabel, .pstep.s-block .plabel { color: var(--txt); }
+
+  /* ---- status card grid ---- */
+  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 16px 15px; box-shadow: var(--shadow); position: relative;
+    border-left: 3px solid var(--idle);
+  }
+  .card.ready { border-left-color: var(--ready); }
+  .card.warn  { border-left-color: var(--warn); }
+  .card.block { border-left-color: var(--block); }
+  .card.idle  { border-left-color: var(--idle); }
+  .card .chead { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .card .ctitle { font-size: 13.5px; font-weight: 700; }
+  .card .ckey { font-size: 10.5px; color: var(--txt-faint); margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .badge {
+    font-size: 11px; font-weight: 800; letter-spacing:.4px; padding: 4px 9px; border-radius: 999px;
+    white-space: nowrap; text-transform: uppercase;
+  }
+  .badge.ready { background: var(--ready-bg); color: var(--ready); }
+  .badge.warn  { background: var(--warn-bg); color: var(--warn); }
+  .badge.block { background: var(--block-bg); color: var(--block); }
+  .badge.idle  { background: var(--idle-bg); color: var(--txt-dim); }
+  .card .cmetric { font-size: 23px; font-weight: 800; margin: 10px 0 2px; letter-spacing:-.5px; }
+  .card .cmsg { font-size: 12.5px; color: var(--txt-dim); min-height: 32px; }
+  .card .cfoot { margin-top: 11px; font-size: 11.5px; color: var(--accent); display:flex; align-items:center; gap:6px; }
+
+  /* ---- checklist ---- */
+  .checklist { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow:hidden; }
+  .crow { display:grid; grid-template-columns: 30px 1.1fr 2fr 110px; gap: 14px; align-items:center; padding: 13px 18px; border-top: 1px solid var(--line-soft); }
+  .crow:first-child { border-top: none; }
+  .crow:hover { background: var(--panel-2); }
+  .crow .ico { font-size: 17px; text-align:center; }
+  .crow .step { font-weight: 700; font-size: 13.5px; }
+  .crow .step small { display:block; color: var(--txt-faint); font-weight: 500; font-size: 11px; }
+  .crow .why { color: var(--txt-dim); font-size: 12.5px; }
+  .crow .act { text-align:right; }
+  .crow .act a { font-size: 12px; font-weight:600; }
+  .crow.is-idle .step, .crow.is-idle .why { opacity: .6; }
+
+  .two-col { display:grid; grid-template-columns: 1.15fr 1fr; gap: 18px; align-items:start; }
+
+  footer.notes { margin-top: 40px; background: var(--bg-2); border:1px solid var(--line); border-radius: var(--radius); padding: 24px 26px; }
+  footer.notes h2 { margin: 0 0 6px; font-size: 17px; }
+  footer.notes h3 { margin: 20px 0 6px; font-size: 13.5px; color: var(--txt); }
+  footer.notes p, footer.notes li { color: var(--txt-dim); font-size: 13px; }
+  footer.notes code { background: #0e1422; border:1px solid var(--line); border-radius:5px; padding: 1px 6px; font-size: 12px; color:#cfe0ff; }
+  footer.notes ul { margin: 6px 0; padding-left: 20px; }
+  .legend { display:flex; gap: 16px; flex-wrap:wrap; font-size: 12px; color: var(--txt-dim); margin-top: 6px; }
+  .legend span { display:inline-flex; align-items:center; gap:7px; }
+  .legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+
+  @media (max-width: 980px) {
+    .hero { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: repeat(3, 1fr); row-gap: 18px; }
+    .pstep::before { display:none; }
+  }
+  @media (max-width: 620px) {
+    .grid { grid-template-columns: 1fr; }
+    .crow { grid-template-columns: 26px 1fr; }
+    .crow .why, .crow .act { display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="proto-banner">
+  <b>PROTOTYPE — fake data.</b> Visual design mockup for review only. Not connected to the database, optimizer, or exports. Nothing here changes the production app.
+</div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="logo">DK</div>
+      <div>Lineup Lab<small>UFC DraftKings Classic · Command Center</small></div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="scenario" id="scenario" title="Prototype: preview different slate states">
+      <button data-scn="progress" class="active">In&nbsp;progress</button>
+      <button data-scn="review">Needs&nbsp;review</button>
+      <button data-scn="ready">Ready</button>
+    </div>
+    <div class="slate-picker">
+      <label for="slate">Slate</label>
+      <select id="slate">
+        <option>#7 — UFC 312: Jones vs. Aspinall (2026-06-06)</option>
+        <option>#6 — UFC Fight Night: Blanchfield vs. Fiorot</option>
+        <option>#5 — UFC 311 (archived)</option>
+      </select>
+    </div>
+    <div class="gate-pill" id="gatePill">
+      <span class="dot"></span><span class="txt">—</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ===== HERO: next action + readiness ===== -->
+  <div class="hero">
+    <div class="next-action">
+      <div class="step-badge" id="naStep">Step 3 of 9</div>
+      <div class="eyebrow">Next required action</div>
+      <h1 id="naTitle">Match the odds feed</h1>
+      <p id="naDesc">12 of 26 active fighters have no matched moneyline. Import or paste an odds CSV on the Odds page and clear the review queue.</p>
+      <div class="cta-row">
+        <button class="btn" id="naBtn">Go to Odds →</button>
+        <button class="btn secondary">View full checklist</button>
+      </div>
+      <div class="why" id="naWhy">Why this is next: projections and the optimizer can't use a fighter without an implied win probability.</div>
+    </div>
+
+    <div class="readiness">
+      <h3>Slate readiness</h3>
+      <div class="sub" id="rdSub">UFC 312 · 26 active fighters · 13 fights</div>
+      <div class="gauge">
+        <div class="ring" id="ring"><div class="val"><span id="ringPct">45</span>%<small id="ringLbl">READY</small></div></div>
+        <div class="counts">
+          <div class="count-row"><span class="chip" style="background:var(--block-bg);color:var(--block)">⛔</span> <b id="cBlock">2</b> <span>blocking</span></div>
+          <div class="count-row"><span class="chip" style="background:var(--warn-bg);color:var(--warn)">⚠</span> <b id="cWarn">3</b> <span>warning</span></div>
+          <div class="count-row"><span class="chip" style="background:var(--ready-bg);color:var(--ready)">✓</span> <b id="cPass">6</b> <span>passing</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PIPELINE STEPPER ===== -->
+  <div class="section-title">Build pipeline <span class="rule"></span></div>
+  <div class="pipeline" id="pipeline"><!-- steps injected --></div>
+
+  <!-- ===== MAIN: status cards + checklist ===== -->
+  <div class="section-title">Slate signals <span class="rule"></span></div>
+  <div class="two-col">
+    <div>
+      <div class="grid" id="cardGrid"><!-- cards injected --></div>
+    </div>
+    <div>
+      <div class="checklist" id="checklist"><!-- rows injected --></div>
+      <div class="legend">
+        <span><i style="background:var(--ready)"></i> Ready</span>
+        <span><i style="background:var(--warn)"></i> Warning</span>
+        <span><i style="background:var(--block)"></i> Blocked</span>
+        <span><i style="background:var(--idle)"></i> Not started</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PORTING NOTES ===== -->
+  <footer class="notes">
+    <h2>Porting this into Streamlit</h2>
+    <p>
+      This mockup is a <b>view layer only</b>. Every signal shown maps to a value the
+      app already computes in <code>evaluate_manual_review(conn, slate_id)</code>
+      (the Phase&nbsp;C read aggregator in <code>src/slate/manual_review_service.py</code>).
+      Porting = rendering that existing <code>ReviewReadiness</code> result with this layout.
+      <b>No new business logic, no schema change, no extra DB writes.</b>
+    </p>
+
+    <h3>1. Data already exists — reuse it</h3>
+    <ul>
+      <li><code>readiness = evaluate_manual_review(conn, active_slate_id)</code> → read-only, one call per render.</li>
+      <li>Index <code>readiness.checks</code> by <code>.code</code>; each card reads that check's <code>.status</code> (pass/warn/block) and <code>.message</code>.</li>
+      <li>Gauge counts come straight from <code>readiness.summary</code> (<code>blocking_count</code>, <code>warning_count</code>, <code>info_count</code>, <code>ready</code>).</li>
+      <li>Optimizer / Export cards read the same <code>readiness.summary.ready</code> gate the two pages already enforce — they report <em>availability</em>, not completion.</li>
+      <li>Fighter-count / fight-count chips are cheap <code>len()</code> reads (or widen <code>ReviewReadiness</code> to carry them, per HOME_DASHBOARD_UX_DESIGN §9).</li>
+    </ul>
+
+    <h3>2. The "next action" is a pure mapping</h3>
+    <p>
+      Implement <code>recommend_next_action(readiness) -&gt; NextAction</code> as a pure,
+      unit-tested function (proposed <code>src/slate/home_dashboard.py</code>) using the
+      precedence in HOME_DASHBOARD_UX_DESIGN §5: no slate → Slate Setup; <code>gate_ready</code> → Optimizer;
+      structurally-clean-but-unacked → Manual Review; otherwise the first failing Blocking check
+      maps to its page. The hero panel renders its label/why/target only.
+    </p>
+
+    <h3>3. Component mapping (mockup → Streamlit)</h3>
+    <ul>
+      <li>Top bar slate picker → single <code>st.selectbox</code> writing <code>st.session_state["active_slate_id"]</code> (the global-slate idea in §6).</li>
+      <li>Status cards → <code>st.container(border=True)</code> + <code>st.metric</code> + a colored status chip; the 3-col grid → <code>st.columns(3)</code>.</li>
+      <li>Pipeline stepper → a row of small <code>st.columns</code> with an icon per step (pure markdown/HTML via <code>st.markdown</code>).</li>
+      <li>Checklist rows → the 9 workflow rows; link with <code>st.page_link("pages/NN_*.py", …)</code> (deferred to A5.4 behind an AppTest-compat check; plain text fallback first).</li>
+      <li>Color system → a small CSS block injected once via <code>st.markdown(unsafe_allow_html=True)</code>, or Streamlit-native <code>st.success/st.warning/st.error</code> if you want zero custom CSS.</li>
+    </ul>
+
+    <h3>4. Hard constraints carried over</h3>
+    <ul>
+      <li><b>Read-only on load</b> (docs/DEVELOPMENT_NOTES.md §11): page load + slate switch are reads only. No INSERT/UPDATE/DELETE.</li>
+      <li><b>No optimizer run / no export build on load</b> — the cards display the gate state; they never call <code>run_optimizer</code> or <code>build_run_log</code>.</li>
+      <li><b>No re-deriving verdicts</b> — render <code>ReviewCheckResult.status</code>; don't re-classify checks (avoids drift from the Manual Review gate).</li>
+      <li><b>No <code>effective_status</code> promotion</b> — consume only what the aggregator already surfaces.</li>
+    </ul>
+
+    <h3>5. Suggested slice order</h3>
+    <p>
+      A5.2 home dashboard (cards + checklist + next-action, plain-text links, <code>active_slate_id</code> written home-only) →
+      A5.3 per-page slate opt-in → A5.4 <code>st.page_link</code> deep-links + copy polish.
+      Each ships with the AppTest + pure-function unit tests listed in HOME_DASHBOARD_UX_DESIGN §8.
+    </p>
+    <p style="margin-top:14px;color:var(--txt-faint);font-size:12px">
+      Prototype file: <code>docs/ui_prototypes/lineup_command_center_mockup.html</code> · fake data · safe to delete.
+    </p>
+  </footer>
+</div>
+
+<script>
+/* ------------------------------------------------------------------
+   Fake data only. Three scenarios demonstrate the ready / warning /
+   blocked / not-started states. Each "signal" key matches a Manual
+   Review check code (or the readiness gate) so the mapping to
+   evaluate_manual_review() is explicit.
+------------------------------------------------------------------ */
+const STATUS = { ready:"ready", warn:"warn", block:"block", idle:"idle" };
+const ICON = { ready:"✅", warn:"⚠️", block:"⛔", idle:"◻️" };
+const BADGE = { ready:"Ready", warn:"Warning", block:"Blocked", idle:"Not started" };
+
+// The 12 requested command-center signals, in workflow-relevant order.
+// Each scenario supplies {status, metric, msg} per signal id.
+const SIGNALS = [
+  { id:"slate",      title:"Current slate",          code:"SlateRecord",            foot:"Open Slate Setup" },
+  { id:"salary",     title:"Salary import",          code:"salary_imported",        foot:"Open Slate Setup" },
+  { id:"faightcard", title:"Fight card / pairing",   code:"fight_group_coverage",   foot:"Open Fight Groups" },
+  { id:"rounds",     title:"Scheduled rounds",       code:"scheduled_rounds_reviewed", foot:"Open Fight Groups" },
+  { id:"odds",       title:"Odds match",             code:"odds_unmatched_active",  foot:"Open Odds" },
+  { id:"fstatus",    title:"Fighter status",         code:"fighter_status_review",  foot:"Open Fighter Status" },
+  { id:"proj",       title:"Projection readiness",   code:"projection_non_projectable", foot:"Open Projections" },
+  { id:"alerts",     title:"Mismatch alerts",        code:"mismatch_alerts_warn",   foot:"Open Alerts" },
+  { id:"review",     title:"Manual Review gate",     code:"manual_review_user_ack", foot:"Open Manual Review" },
+  { id:"optimizer",  title:"Optimizer readiness",    code:"readiness.summary.ready", foot:"Open Optimizer" },
+  { id:"export",     title:"Export readiness",       code:"readiness.summary.ready", foot:"Open Export & Run Log" },
+];
+
+// Pipeline (workflow order from HOME_DASHBOARD_UX_DESIGN §3.4)
+const PIPE = [
+  {n:"01", l:"Slate Setup", sig:"salary"},
+  {n:"02", l:"Fight Groups", sig:"faightcard"},
+  {n:"03", l:"Odds", sig:"odds"},
+  {n:"09", l:"Projections", sig:"proj"},
+  {n:"05", l:"Alerts", sig:"alerts"},
+  {n:"04", l:"Fighter Status", sig:"fstatus"},
+  {n:"06", l:"Manual Review", sig:"review"},
+  {n:"07", l:"Optimizer", sig:"optimizer"},
+  {n:"08", l:"Export", sig:"export"},
+];
+
+// "Why it matters" rationales for the checklist.
+const WHY = {
+  salary:"A validated DK salary CSV seeds the fighter pool and salaries.",
+  faightcard:"Every active fighter needs an opponent before projections and the optimizer can use them.",
+  odds:"Implied win probability drives the default projection — unmatched fighters are unusable.",
+  proj:"Projections must resolve for the slate before lineups can be built.",
+  alerts:"Mismatch alerts flag odds/salary disagreements worth a human look.",
+  fstatus:"Injury / weight-miss flags. Informational in v1 — not yet wired into the gate.",
+  review:"The slate must be explicitly marked reviewed before the gate opens.",
+  optimizer:"Generates research lineups once the gate is green.",
+  export:"Builds the internal research export once lineups exist.",
+};
+
+const SCENARIOS = {
+  // Blocked at odds — mid-build.
+  progress: {
+    pct:45, ready:false, gate:"block",
+    sub:"UFC 312: Jones vs. Aspinall · 26 active fighters · 13 fights",
+    counts:{block:2, warn:3, pass:6},
+    next:{ step:3, title:"Match the odds feed",
+      desc:"12 of 26 active fighters have no matched moneyline. Import or paste an odds CSV on the Odds page, then clear the review queue.",
+      btn:"Go to Odds →",
+      why:"Why this is next: projections and the optimizer can't use a fighter without an implied win probability." },
+    sig:{
+      slate:     {s:"ready", m:"UFC 312", msg:"Selected. Event date 2026-06-06."},
+      salary:    {s:"ready", m:"26 / 26", msg:"DK salary CSV imported and validated."},
+      faightcard:{s:"ready", m:"13 / 13", msg:"All active fighters paired (Game Info)."},
+      rounds:    {s:"warn",  m:"0 marked 5R", msg:"No 5-round main event marked — confirm the headliner."},
+      odds:      {s:"block", m:"12 unmatched", msg:"14 / 26 matched. 12 active fighters have no moneyline."},
+      fstatus:   {s:"ready", m:"0 flags", msg:"No injury / weight-miss flags. (Informational in v1.)"},
+      proj:      {s:"block", m:"12 blocked", msg:"12 fighters non-projectable — missing odds upstream."},
+      alerts:    {s:"warn",  m:"3 alerts", msg:"3 odds↔salary mismatches worth a look."},
+      review:    {s:"idle",  m:"Not reviewed", msg:"Resolve blockers before marking reviewed."},
+      optimizer: {s:"idle",  m:"Locked", msg:"Opens when the Manual Review gate is green."},
+      export:    {s:"idle",  m:"Locked", msg:"Opens after lineups can be generated."},
+    }
+  },
+  // Structurally clean, warnings remain, not yet acknowledged.
+  review: {
+    pct:82, ready:false, gate:"warn",
+    sub:"UFC 312: Jones vs. Aspinall · 26 active fighters · 13 fights",
+    counts:{block:1, warn:3, pass:7},
+    next:{ step:6, title:"Review & mark the slate reviewed",
+      desc:"All structural checks pass. 3 warnings are worth a glance, then click “Mark Slate Manually Reviewed” to open the optimizer.",
+      btn:"Go to Manual Review →",
+      why:"Why this is next: the gate stays closed until the slate is explicitly acknowledged — even when everything else is green." },
+    sig:{
+      slate:     {s:"ready", m:"UFC 312", msg:"Selected. Event date 2026-06-06."},
+      salary:    {s:"ready", m:"26 / 26", msg:"DK salary CSV imported and validated."},
+      faightcard:{s:"ready", m:"13 / 13", msg:"All active fighters paired and confirmed."},
+      rounds:    {s:"warn",  m:"1 of 1 5R", msg:"Main event marked 5R — confirm title bouts."},
+      odds:      {s:"ready", m:"26 / 26", msg:"All active fighters matched to a moneyline."},
+      fstatus:   {s:"warn",  m:"1 flag", msg:"1 fighter flagged short-notice. (Informational in v1.)"},
+      proj:      {s:"ready", m:"26 / 26", msg:"All fighters projectable."},
+      alerts:    {s:"warn",  m:"2 alerts", msg:"2 odds↔salary mismatches worth a look."},
+      review:    {s:"block", m:"Not reviewed", msg:"Structurally clean — awaiting your acknowledgement."},
+      optimizer: {s:"idle",  m:"Locked", msg:"Opens when the slate is marked reviewed."},
+      export:    {s:"idle",  m:"Locked", msg:"Opens after the optimizer is available."},
+    }
+  },
+  // Green across the board, reviewed — ready to optimize.
+  ready: {
+    pct:100, ready:true, gate:"ready",
+    sub:"UFC 312: Jones vs. Aspinall · 26 active fighters · 13 fights",
+    counts:{block:0, warn:0, pass:11},
+    next:{ step:7, title:"Generate research lineups",
+      desc:"The slate is reviewed and the gate is green. Build up to 5 research lineups on the Optimizer, then create the internal export.",
+      btn:"Go to Optimizer →",
+      why:"Next after this: Export & Run Log to save the internal research CSV / JSON / Markdown." },
+    sig:{
+      slate:     {s:"ready", m:"UFC 312", msg:"Selected. Event date 2026-06-06."},
+      salary:    {s:"ready", m:"26 / 26", msg:"DK salary CSV imported and validated."},
+      faightcard:{s:"ready", m:"13 / 13", msg:"All active fighters paired and confirmed."},
+      rounds:    {s:"ready", m:"1 main event", msg:"5-round main event confirmed."},
+      odds:      {s:"ready", m:"26 / 26", msg:"All active fighters matched to a moneyline."},
+      fstatus:   {s:"ready", m:"0 flags", msg:"No outstanding fighter-status flags."},
+      proj:      {s:"ready", m:"26 / 26", msg:"All fighters projectable."},
+      alerts:    {s:"ready", m:"0 alerts", msg:"No unresolved mismatch alerts."},
+      review:    {s:"ready", m:"Reviewed", msg:"Marked reviewed 2026-06-05 18:42 UTC."},
+      optimizer: {s:"ready", m:"Unlocked", msg:"Gate is green — ready to build lineups."},
+      export:    {s:"ready", m:"Unlocked", msg:"Ready to build the internal research export."},
+    }
+  },
+};
+
+const GATE_TEXT = {
+  ready: ["var(--ready)","Gate open · ready"],
+  warn:  ["var(--warn)","Gate closed · review needed"],
+  block: ["var(--block)","Gate closed · blocked"],
+};
+
+function render(scnKey){
+  const scn = SCENARIOS[scnKey];
+
+  // gate pill
+  const pill = document.getElementById("gatePill");
+  const [gc, gt] = GATE_TEXT[scn.gate];
+  pill.querySelector(".dot").style.background = gc;
+  pill.querySelector(".txt").textContent = gt;
+  pill.style.borderColor = gc;
+  pill.style.color = gc;
+
+  // hero
+  document.getElementById("naStep").textContent = "Step " + scn.next.step + " of 9";
+  document.getElementById("naTitle").textContent = scn.next.title;
+  document.getElementById("naDesc").textContent = scn.next.desc;
+  document.getElementById("naBtn").textContent = scn.next.btn;
+  document.getElementById("naWhy").textContent = scn.next.why;
+  document.getElementById("rdSub").textContent = scn.sub;
+
+  // gauge
+  const ring = document.getElementById("ring");
+  ring.style.setProperty("--p", scn.pct);
+  ring.style.setProperty("--c", scn.ready ? "var(--ready)" : (scn.gate==="block"?"var(--block)":"var(--warn)"));
+  document.getElementById("ringPct").textContent = scn.pct;
+  document.getElementById("ringLbl").textContent = scn.ready ? "READY" : "BUILDING";
+  document.getElementById("cBlock").textContent = scn.counts.block;
+  document.getElementById("cWarn").textContent = scn.counts.warn;
+  document.getElementById("cPass").textContent = scn.counts.pass;
+
+  // status cards
+  const grid = document.getElementById("cardGrid");
+  grid.innerHTML = SIGNALS.map(sg => {
+    const d = scn.sig[sg.id];
+    return `<div class="card ${d.s}">
+      <div class="chead">
+        <div><div class="ctitle">${sg.title}</div><div class="ckey">${sg.code}</div></div>
+        <span class="badge ${d.s}">${BADGE[d.s]}</span>
+      </div>
+      <div class="cmetric">${d.m}</div>
+      <div class="cmsg">${d.msg}</div>
+      <div class="cfoot">${sg.foot} →</div>
+    </div>`;
+  }).join("");
+
+  // pipeline stepper
+  const pipe = document.getElementById("pipeline");
+  pipe.innerHTML = PIPE.map(p => {
+    const d = scn.sig[p.sig];
+    const cls = "s-" + d.s;
+    return `<div class="pstep ${cls}">
+      <div class="node">${ICON[d.s]}</div>
+      <div class="pnum">${p.n}</div>
+      <div class="plabel">${p.l}</div>
+    </div>`;
+  }).join("");
+
+  // checklist (workflow order)
+  const cl = document.getElementById("checklist");
+  cl.innerHTML = PIPE.map(p => {
+    const d = scn.sig[p.sig];
+    const idle = d.s === "idle" ? "is-idle" : "";
+    return `<div class="crow ${idle}">
+      <div class="ico">${ICON[d.s]}</div>
+      <div class="step">${p.l}<small>Page ${p.n}</small></div>
+      <div class="why">${WHY[p.sig] || ""}</div>
+      <div class="act"><a href="#">Open →</a></div>
+    </div>`;
+  }).join("");
+}
+
+document.querySelectorAll("#scenario button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#scenario button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    render(b.dataset.scn);
+  });
+});
+
+render("progress");
+</script>
+</body>
+</html>

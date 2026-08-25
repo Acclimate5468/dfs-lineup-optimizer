@@ -1,0 +1,388 @@
+<!--
+  Lineup Lab — Two-step builder (minimal prototype)
+  =================================================
+  PROTOTYPE / fake data. Not wired to anything. Changes nothing in the app.
+
+  The whole app, two inputs and one output:
+    1) Upload DraftKings salary CSV
+    2) Odds checker
+    -> Build  =>  Lineups + Reasoning
+
+  Open in a browser. Click "Load example" on each card, then "Build lineups".
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lineup Lab — build lineups</title>
+<style>
+  /* DraftKings palette: signature bright green on near-black, white text. */
+  :root{
+    --bg:#0a0e0f; --panel:#141a1d; --panel-2:#1b2327; --line:#2a3439;
+    --txt:#f4f7f5; --dim:#9fb0a8; --faint:#6f8079;
+    --accent:#53d337; --accent-2:#36a31f;
+    --dk-orange:#f46c21;
+    --ready:#53d337; --ready-bg:rgba(83,211,55,.14);
+    --warn:#f5a623; --warn-bg:rgba(245,166,35,.15);
+    --block:#ff5247;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:
+      radial-gradient(900px 500px at 85% -10%, #103018 0%, transparent 60%),
+      var(--bg);
+    color:var(--txt); line-height:1.5;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .proto{background:#0f1a12;color:#9fe08a;font-size:12px;text-align:center;padding:6px;border-bottom:1px solid #21351f;}
+  .wrap{max-width:960px;margin:0 auto;padding:30px 22px 80px;}
+
+  .head{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;}
+  h1{font-size:22px;margin:0;font-weight:800;letter-spacing:-.3px;}
+  .sub{color:var(--dim);font-size:13.5px;margin:3px 0 26px;}
+
+  /* two input cards */
+  .inputs{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .card{background:var(--panel);border:1px solid var(--dk-orange);border-radius:var(--radius);padding:20px 20px 18px;position:relative;}
+  .card .step{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);font-weight:700;}
+  .card h2{font-size:17px;margin:5px 0 3px;}
+  .card .desc{color:var(--dim);font-size:12.5px;margin-bottom:16px;}
+  .drop{
+    border:1.5px dashed var(--line);border-radius:12px;padding:22px;text-align:center;color:var(--faint);
+    font-size:13px;background:#0f140f90;transition:.15s;
+  }
+  .drop .big{font-size:24px;display:block;margin-bottom:6px;}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;font-weight:700;font-size:13.5px;
+    padding:10px 16px;border-radius:10px;background:var(--accent);color:#07230b;box-shadow:0 6px 16px rgba(83,211,55,.3);margin-top:14px;}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--dk-orange);box-shadow:none;}
+  .btn.sm{padding:7px 13px;font-size:12.5px;margin-top:0;}
+  .demo-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .demo-label{font-size:12px;color:var(--faint);}
+  .btn.ghost{background:transparent;border:1px solid var(--dk-orange);color:var(--txt);box-shadow:none;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
+
+  /* ready state */
+  .done{display:none;}
+  .card.ok .drop{display:none;}
+  .card.ok .loadbtn{display:none;}
+  .card.ok .done{display:block;}
+  .done .ok-row{display:flex;align-items:center;gap:9px;font-weight:700;color:var(--ready);font-size:14px;}
+  .done .ok-row .dot{width:9px;height:9px;border-radius:50%;background:var(--ready);}
+  .done .stat{display:flex;gap:18px;margin-top:14px;}
+  .done .stat .v{font-size:22px;font-weight:800;}
+  .done .stat .l{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;}
+  .done .note{margin-top:12px;font-size:12.5px;color:var(--dim);}
+  .done .note.ok{color:var(--ready);}
+  .done .note.warn{color:var(--warn);}
+  .done .note.block{color:var(--block);}
+  .relink{margin-top:14px;font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;}
+
+  /* build bar */
+  .buildbar{margin:22px 0 0;background:var(--panel);border:1px solid var(--dk-orange);border-radius:var(--radius);padding:16px 20px;}
+  .bbtop{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .buildbar .status{color:var(--dim);font-size:13px;}
+  .buildbar .status b{color:var(--txt);}
+  /* Manual Review gate — a serious safety checkpoint, folded into Build (not removed). */
+  .gate{display:none;margin-top:16px;border-top:1px solid #2a3439;padding-top:16px;}
+  .gate.show{display:block;}
+  .gate-panel{border:1px solid var(--line);border-left-width:4px;border-radius:12px;padding:16px 18px;background:#10161a;}
+  .gate-panel.block{border-left-color:var(--block);box-shadow:0 0 0 1px rgba(255,82,71,.12);}
+  .gate-panel.warn{border-left-color:var(--warn);}
+  .gate-panel.ready{border-left-color:var(--ready);}
+  .gate-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px;}
+  .gate-title{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:800;letter-spacing:.2px;}
+  .verdict{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:6px 13px;border-radius:999px;}
+  .verdict .vd{width:9px;height:9px;border-radius:50%;background:currentColor;}
+  .verdict.ready{color:var(--ready);background:var(--ready-bg);}
+  .verdict.warn{color:var(--warn);background:var(--warn-bg);}
+  .verdict.block{color:var(--block);background:rgba(255,82,71,.14);}
+  .gate-checks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .gc{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px;border:1px solid #2a3439;}
+  .gc.ok{color:var(--ready);background:var(--ready-bg);border-color:rgba(83,211,55,.3);}
+  .gc.warn{color:var(--warn);background:var(--warn-bg);border-color:rgba(245,166,35,.3);}
+  .gc.block{color:var(--block);background:rgba(255,82,71,.13);border-color:rgba(255,82,71,.35);}
+  .gate-action{border-top:1px dashed #2a3439;padding-top:14px;}
+  .reviewed{display:flex;align-items:center;gap:11px;font-size:14px;font-weight:700;color:var(--txt);cursor:pointer;}
+  .reviewed input{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex:none;}
+  .blocked-msg{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:800;color:var(--block);}
+  .gate-note{margin-top:9px;font-size:12px;color:var(--faint);}
+  .gate-note a{color:var(--dk-orange);font-weight:600;}
+  .build{font-size:15px;padding:13px 22px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#07230b;border:none;font-weight:800;cursor:pointer;box-shadow:0 8px 22px rgba(83,211,55,.35);}
+  .build:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;background:#2a3439;color:#8aa093;}
+
+  /* output */
+  .output{display:none;margin-top:30px;}
+  .output.show{display:block;}
+  .sect{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--faint);display:flex;align-items:center;gap:10px;margin:0 2px 13px;}
+  .sect .rule{flex:1;height:1px;background:#1f2940;}
+  .lineups{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .lu{background:var(--panel);border:1px solid var(--dk-orange);border-radius:14px;padding:15px 16px;}
+  .lu .luh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  .lu .luh b{font-size:14px;}
+  .lu .luh .proj{color:var(--ready);font-weight:800;font-size:14px;}
+  .lu table{width:100%;border-collapse:collapse;font-size:13px;}
+  .lu td{padding:5px 0;border-bottom:1px solid #1f2a25;}
+  .lu td:last-child{text-align:right;color:var(--dim);}
+  .lu tr:last-child td{border-bottom:none;}
+  .lu .lf{display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--faint);}
+  .tag5{font-size:10px;font-weight:700;color:var(--warn);background:var(--warn-bg);padding:1px 6px;border-radius:5px;margin-left:6px;}
+
+  .reason{background:var(--panel);border:1px solid var(--dk-orange);border-radius:14px;padding:18px 20px;margin-top:14px;}
+  .reason h3{margin:0 0 4px;font-size:15px;}
+  .reason .rsub{color:var(--faint);font-size:12px;margin-bottom:14px;}
+  .rline{display:flex;gap:11px;padding:9px 0;border-top:1px solid #1f2a25;font-size:13.5px;color:var(--dim);}
+  .rline:first-of-type{border-top:none;}
+  .rline .ri{flex:none;}
+  .rline b{color:var(--txt);}
+
+  @media (max-width:720px){ .inputs,.lineups{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div class="proto">PROTOTYPE — fake data. Not connected to anything.</div>
+<div class="wrap">
+
+  <div class="head"><div class="logo">DK</div><h1>Lineup Lab</h1></div>
+  <div class="sub">Upload your DraftKings salaries, check the odds, and build lineups with the reasoning behind them.</div>
+
+  <div class="inputs">
+    <!-- 1: salary -->
+    <div class="card" id="cardSalary">
+      <div class="step">Step 1</div>
+      <h2>DraftKings salary</h2>
+      <div class="desc">Upload the DKSalaries CSV for the slate.</div>
+      <div class="drop"><span class="big">⬆️</span> Drop <b>DKSalaries.csv</b> here</div>
+      <button class="btn loadbtn" onclick="loadSalary()">Load example CSV</button>
+      <div class="done">
+        <div class="ok-row"><span class="dot"></span> DKSalaries.csv loaded</div>
+        <div class="stat">
+          <div><div class="v">26</div><div class="l">Fighters</div></div>
+          <div><div class="v">13</div><div class="l">Fights</div></div>
+          <div><div class="v">$50k</div><div class="l">Cap</div></div>
+        </div>
+        <div class="note">Fight card auto-detected from the salary “Game Info” column.</div>
+        <button class="relink" onclick="resetSalary()">Replace file</button>
+      </div>
+    </div>
+
+    <!-- 2: odds -->
+    <div class="card" id="cardOdds">
+      <div class="step">Step 2</div>
+      <h2>Odds checker</h2>
+      <div class="desc">Paste / import current moneylines &amp; news for the same slate.</div>
+      <div class="drop"><span class="big">📊</span> Paste odds or drop an <b>odds snapshot</b></div>
+      <div class="demo-row loadbtn">
+        <span class="demo-label">Check example odds:</span>
+        <button class="btn ghost sm" onclick="loadOdds('blocked')">Blocked</button>
+        <button class="btn ghost sm" onclick="loadOdds('warning')">Warning</button>
+        <button class="btn ghost sm" onclick="loadOdds('ready')">Ready</button>
+      </div>
+      <div class="done">
+        <div class="ok-row" id="oddsOkRow"><span class="dot" id="oddsDot"></span> <span id="oddsOkText">Odds checked</span></div>
+        <div class="stat">
+          <div><div class="v" id="oddsMatched">—</div><div class="l">Matched</div></div>
+          <div><div class="v" id="oddsFlags">—</div><div class="l">News flags</div></div>
+          <div><div class="v" id="oddsAge">—</div><div class="l">Snapshot age</div></div>
+        </div>
+        <div class="note" id="oddsNote"></div>
+        <button class="relink" onclick="resetOdds()">Re-check odds</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- build -->
+  <div class="buildbar">
+    <div class="bbtop">
+      <div class="status" id="buildStatus">Load both inputs to build.</div>
+      <button class="build" id="buildBtn" disabled onclick="build()">Build lineups & reasoning</button>
+    </div>
+    <div class="gate" id="gate">
+      <div class="gate-panel" id="gatePanel">
+        <div class="gate-top">
+          <div class="gate-title">🔒 Manual Review gate</div>
+          <div class="verdict" id="gateVerdict"><span class="vd"></span><span id="gateVerdictTxt">—</span></div>
+        </div>
+        <div class="gate-checks" id="gateChecks"></div>
+        <div class="gate-action" id="gateAction"></div>
+        <div class="gate-note" id="gateNote"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- output -->
+  <div class="output" id="output">
+    <div class="sect" style="margin-top:30px">Lineups <span class="rule"></span></div>
+    <div class="lineups">
+      <div class="lu">
+        <div class="luh"><b>Lineup 1</b><span class="proj">412.6 pts</span></div>
+        <table>
+          <tr><td>Sergei Pavlovich</td><td>$9,400</td></tr>
+          <tr><td>Yadong Song <span class="tag5">5R</span></td><td>$9,500</td></tr>
+          <tr><td>Cody Haddon</td><td>$9,300</td></tr>
+          <tr><td>Diego Lopes</td><td>$8,200</td></tr>
+          <tr><td>Joel Alvarez</td><td>$7,600</td></tr>
+          <tr><td>Aoriqileng</td><td>$6,000</td></tr>
+        </table>
+        <div class="lf"><span>Total $50,000</span><span>6 fighters · no same-fight pair</span></div>
+      </div>
+      <div class="lu">
+        <div class="luh"><b>Lineup 2</b><span class="proj">408.1 pts</span></div>
+        <table>
+          <tr><td>Yadong Song <span class="tag5">5R</span></td><td>$9,500</td></tr>
+          <tr><td>Glover Teixeira</td><td>$8,900</td></tr>
+          <tr><td>Diego Lopes</td><td>$8,200</td></tr>
+          <tr><td>Joel Alvarez</td><td>$7,600</td></tr>
+          <tr><td>Cody Haddon</td><td>$9,300</td></tr>
+          <tr><td>Aoriqileng</td><td>$6,000</td></tr>
+        </table>
+        <div class="lf"><span>Total $49,500</span><span>6 fighters · no same-fight pair</span></div>
+      </div>
+    </div>
+
+    <div class="sect" style="margin-top:26px">Reasoning <span class="rule"></span></div>
+    <div class="reason">
+      <h3>Why these lineups</h3>
+      <div class="rsub">Built from the odds you checked + the projection rules — not a black box.</div>
+      <div class="rline"><span class="ri">💪</span><div><b>Pavlovich (−320, 76% implied)</b> is the safest favorite on the slate — anchors Lineup 1 for a likely finish (high ITD odds).</div></div>
+      <div class="rline"><span class="ri">🎯</span><div><b>Yadong Song</b> gets a boost as a <b>5-round main event</b> — more rounds, more scoring upside, so he's in both builds.</div></div>
+      <div class="rline"><span class="ri">💰</span><div><b>Haddon ($9,300, 64% implied)</b> and <b>Aoriqileng ($6,000)</b> are the best value gaps — strong win probability for the salary.</div></div>
+      <div class="rline"><span class="ri">⚠️</span><div><b>Excluded:</b> 2 fighters had no matched odds (unprojectable) and 1 carries a short-notice flag — left out until you resolve them in the odds checker.</div></div>
+      <div class="rline"><span class="ri">🚫</span><div>No lineup pairs both fighters from the same bout (DK rule), and every build is exactly 6 fighters under the $50k cap.</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Fake odds-check outcomes. The gate VERDICT is derived from the slate's
+  // checks (production-realistic) — never hand-set independently.
+  const ODDS = {
+    blocked: {
+      matched:"24/26", flags:"—", age:"2h",
+      okText:"Odds checked — blocking issues", dot:"var(--block)",
+      note:"⛔ 2 fighters have no matched moneyline, so 2 are non-projectable.", noteClass:"block",
+      verdict:["block","Blocked"],
+      chips:[
+        ["ok","✓ Salary · 26 fighters"],
+        ["ok","✓ Pairings applied · 13 fights"],
+        ["block","⛔ 2 fighters unmatched (no moneyline)"],
+        ["block","⛔ 2 missing projections"],
+      ],
+    },
+    warning: {
+      matched:"26/26", flags:"1", age:"2h",
+      okText:"Odds checked", dot:"var(--ready)",
+      note:"⚠️ 1 short-notice news flag · snapshot is 2h old.", noteClass:"warn",
+      verdict:["warn","Needs review"],
+      chips:[
+        ["ok","✓ Salary · 26 fighters"],
+        ["ok","✓ Pairings applied · 13 fights"],
+        ["ok","✓ Odds 26/26 matched"],
+        ["ok","✓ All fighters projectable"],
+        ["warn","⚠ 1 short-notice news flag"],
+        ["warn","⚠ Snapshot 2h old"],
+      ],
+    },
+    ready: {
+      matched:"26/26", flags:"0", age:"just now",
+      okText:"Odds checked", dot:"var(--ready)",
+      note:"✅ All checks green — fresh snapshot, no flags.", noteClass:"ok",
+      verdict:["ready","Ready"],
+      chips:[
+        ["ok","✓ Salary · 26 fighters"],
+        ["ok","✓ Pairings applied · 13 fights"],
+        ["ok","✓ Odds 26/26 matched"],
+        ["ok","✓ All fighters projectable"],
+        ["ok","✓ No outstanding news flags"],
+        ["ok","✓ Snapshot fresh"],
+      ],
+    },
+  };
+
+  const state = {salary:false, odds:false, scenario:null, reviewed:false};
+
+  function renderGate(){
+    const scn = ODDS[state.scenario];
+    if(!scn) return;
+    const isBlocked = state.scenario === "blocked";
+    document.getElementById("gatePanel").className = "gate-panel " + scn.verdict[0];
+    document.getElementById("gateVerdict").className = "verdict " + scn.verdict[0];
+    document.getElementById("gateVerdictTxt").textContent = scn.verdict[1];
+    document.getElementById("gateChecks").innerHTML =
+      scn.chips.map(c => `<span class="gc ${c[0]}">${c[1]}</span>`).join("");
+
+    const action = document.getElementById("gateAction");
+    const note = document.getElementById("gateNote");
+    if(isBlocked){
+      // Blocked: no review affordance — must resolve first.
+      action.innerHTML = `<div class="blocked-msg">⛔ Resolve blocking issues before review.</div>`;
+      note.innerHTML = `Build stays locked while blocking checks fail. Fix unmatched odds / projections on the <a href="#">odds &amp; projections detail pages →</a>`;
+    } else {
+      action.innerHTML =
+        `<label class="reviewed"><input type="checkbox" id="reviewChk" ${state.reviewed?"checked":""} onchange="toggleReview()">`
+        + `I reviewed this slate — mark reviewed to unlock Build</label>`;
+      note.innerHTML = isWarn(scn)
+        ? `The gate stays intact: warnings are non-blocking, but Build won't run until you explicitly acknowledge them. Detail on the <a href="#">alerts &amp; fighter-status pages →</a>`
+        : `The gate stays intact: Build won't run until you explicitly mark the slate reviewed — the same safety check as the full app.`;
+    }
+  }
+  function isWarn(scn){ return scn.verdict[0] === "warn"; }
+
+  function refresh(){
+    const both = state.salary && state.odds;
+    document.getElementById("gate").classList.toggle("show", both);
+    if(both) renderGate();
+
+    const isBlocked = state.scenario === "blocked";
+    if(!both || isBlocked){ state.reviewed = false; }
+    const ready = both && !isBlocked && state.reviewed;
+
+    document.getElementById("buildBtn").disabled = !ready;
+    const s = document.getElementById("buildStatus");
+    if(ready) s.innerHTML = "<b>Gate cleared.</b> Slate reviewed — build lineups.";
+    else if(both && isBlocked) s.innerHTML = "<b>Blocked.</b> Resolve the issues in the gate before review.";
+    else if(both) s.innerHTML = "Inputs loaded. <b>Review the slate</b> and mark reviewed to unlock Build.";
+    else if(state.salary) s.innerHTML = "Salary loaded. <b>Check odds</b> next.";
+    else if(state.odds) s.innerHTML = "Odds checked. <b>Upload salary</b> next.";
+    else s.textContent = "Load both inputs to build.";
+
+    if(!ready){ document.getElementById("output").classList.remove("show"); }
+  }
+
+  function loadSalary(){ state.salary=true; document.getElementById("cardSalary").classList.add("ok"); refresh(); }
+  function resetSalary(){ state.salary=false; document.getElementById("cardSalary").classList.remove("ok"); refresh(); }
+
+  function loadOdds(scenario){
+    state.odds=true; state.scenario=scenario; state.reviewed=false;
+    const scn = ODDS[scenario];
+    document.getElementById("oddsMatched").textContent = scn.matched;
+    document.getElementById("oddsFlags").textContent = scn.flags;
+    document.getElementById("oddsAge").textContent = scn.age;
+    document.getElementById("oddsOkText").textContent = scn.okText;
+    document.getElementById("oddsDot").style.background = scn.dot;
+    const n = document.getElementById("oddsNote");
+    n.className = "note " + scn.noteClass; n.textContent = scn.note;
+    document.getElementById("cardOdds").classList.add("ok");
+    refresh();
+  }
+  function resetOdds(){ state.odds=false; state.scenario=null; state.reviewed=false; document.getElementById("cardOdds").classList.remove("ok"); refresh(); }
+
+  function toggleReview(){
+    const chk = document.getElementById("reviewChk");
+    state.reviewed = !!(chk && chk.checked);
+    refresh();
+  }
+  function build(){
+    if(document.getElementById("buildBtn").disabled) return;
+    const o=document.getElementById("output"); o.classList.add("show");
+    o.scrollIntoView({behavior:"smooth"});
+  }
+</script>
+</body>
+</html>

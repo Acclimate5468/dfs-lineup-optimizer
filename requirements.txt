@@ -1,0 +1,7 @@
+streamlit>=1.30
+pandas>=2.0
+rapidfuzz>=3.0
+requests>=2.31
+PuLP>=2.7
+pytest>=7.0
+python-dotenv>=1.0

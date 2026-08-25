@@ -1,0 +1,64 @@
+<!--
+  Minimal hand-written fixture mirroring the BestFightOdds event odds-table
+  shape for the ALL-BOOKS consensus parser (ODDS_CONSENSUS_DESIGN.md §5.1).
+
+  This is NOT a copied page dump (docs/DEVELOPMENT_NOTES.md §7 / ODDS_ACQUISITION_V0_DESIGN.md):
+  it is a structural representative with invented fighters and lines, kept just
+  large enough to exercise the all-books parse:
+    - several per-book columns (DraftKings + FanDuel + Caesars) plus a fourth
+      column whose header carries NO recognizable book name, to exercise the
+      positional "Book{n}" label fallback (open question #4),
+    - two fights of two consecutive rows each, to exercise opponent pairing,
+    - a blank cell in one book for one fighter (the book has no line),
+    - a fighter whose DraftKings cell is blank but who still has lines in other
+      books, so the all-books path recovers a fighter the DraftKings-only path
+      drops.
+
+  Real-feed fidelity against an actual BestFightOdds page is deliberately a
+  separate, later slice (design §10.7), not this one.
+-->
+<html>
+  <body>
+    <table class="odds-table">
+      <thead>
+        <tr>
+          <th class="prop-cell">Matchup</th>
+          <th class="book-header"><a title="DraftKings"><img alt="DraftKings" /></a></th>
+          <th class="book-header"><a title="FanDuel"><img alt="FanDuel" /></a></th>
+          <th class="book-header"><img alt="Caesars" /></th>
+          <th class="book-header"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="fighter-cell"><a href="/fighters/Alpha-0001">Alpha Fighter</a></td>
+          <td><span class="oddsnumber">-200</span></td>
+          <td><span class="oddsnumber">-210</span></td>
+          <td><span class="oddsnumber">-195</span></td>
+          <td><span class="oddsnumber">-205</span></td>
+        </tr>
+        <tr>
+          <td class="fighter-cell"><a href="/fighters/Bravo-0002">Bravo Fighter</a></td>
+          <td><span class="oddsnumber">+170</span></td>
+          <td><span class="oddsnumber">+175</span></td>
+          <td><span class="oddsnumber">+168</span></td>
+          <td><span class="oddsnumber"></span></td>
+        </tr>
+        <tr>
+          <td class="fighter-cell"><a href="/fighters/Charlie-0003">Charlie Fighter</a></td>
+          <td><span class="oddsnumber"></span></td>
+          <td><span class="oddsnumber">-145</span></td>
+          <td><span class="oddsnumber">-150</span></td>
+          <td><span class="oddsnumber">-148</span></td>
+        </tr>
+        <tr>
+          <td class="fighter-cell"><a href="/fighters/Delta-0004">Delta Fighter</a></td>
+          <td><span class="oddsnumber">+125</span></td>
+          <td><span class="oddsnumber">+128</span></td>
+          <td><span class="oddsnumber">+130</span></td>
+          <td><span class="oddsnumber">+127</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>

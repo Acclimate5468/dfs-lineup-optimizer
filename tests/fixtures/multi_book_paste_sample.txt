@@ -1,0 +1,7 @@
+Matchup	DraftKings	FanDuel	BetMGM	Caesars	Props
+Jon Jones	−250	-245	−260	-255	14
+Stipe Miocic	+210	+205	+220		8
+Israel Adesanya	-160	−155	-165	-158	22
+Alex Pereira	+140	+135	+145	+138	19
+Sean O'Malley	-120	-118	−122	-119	17
+Merab Dvalishvili	+100	+102	-101	+101	12

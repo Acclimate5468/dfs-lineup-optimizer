@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Databases and operator data
+data/database/*
+data/uploads/salaries/*
+data/uploads/odds/*
+data/uploads/sources/*
+data/raw/*
+data/processed/*
+exports/*
+data/calibration/*.csv
+
+# Preserve safe placeholders and the synthetic calibration sample
+!data/database/.gitkeep
+!data/uploads/salaries/.gitkeep
+!data/uploads/odds/.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!exports/.gitkeep
+!data/calibration/realized_points.sample.csv
+
+# Runtime / editors / OS
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,529 @@
+<!--
+  UFC DFS Lineup Optimizer — App Shell & Component System (v2 prototype)
+  ===================================================================
+  PROTOTYPE / MOCKUP ONLY. Fake data. Not wired to the database, repositories,
+  services, optimizer, or exports. Opening this file changes NOTHING in the
+  production app. It is a visual design playground for review before any
+  Streamlit code is written.
+
+  How to view: open in any browser. No server, no build, no network.
+
+  What this explores (the home command center already shipped — commit
+  3c89197 — so this pushes the *rest* of the app):
+    1. A consistent APP SHELL: left workflow nav + a persistent slate/gate
+       context bar, so every page shares one frame instead of nine
+       disconnected screens.
+    2. A reusable PAGE HEADER pattern: breadcrumb ▸ title ▸ one-line purpose
+       ▸ contextual status banner ▸ inline "next step" hint.
+    3. A small COMPONENT SYSTEM: status cards, mini-stepper, banners,
+       status-aware data tables, workflow-guidance callouts — all from the
+       same tokens the shipped home uses (the `--llc-*` palette), so this
+       reads as the same product.
+    4. Inner-page redesigns (Fight Groups, Odds) using that system.
+
+  See "Porting to Streamlit" (last nav item) for how each piece maps to
+  existing read-only data and Streamlit primitives. No new business logic,
+  no schema change, no page-load writes are implied.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lineup Lab — app shell & components (v2 prototype)</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#161d2e; --panel-2:#1b2336; --panel-3:#11182840;
+    --line:#27324c; --line-soft:#1f2940;
+    --txt:#e7ecf5; --txt-dim:#9aa6be; --txt-faint:#6b7790;
+    --accent:#4f8cff; --accent-soft:#1b2c4d;
+    --ready:#34d399; --ready-bg:rgba(52,211,153,.14);
+    --warn:#fbbf24;  --warn-bg:rgba(251,191,36,.15);
+    --block:#f87171; --block-bg:rgba(248,113,113,.15);
+    --idle:#7a8194;  --idle-bg:rgba(120,130,160,.12);
+    --info:#60a5fa;  --info-bg:rgba(96,165,250,.14);
+    --radius:13px; --shadow:0 8px 28px rgba(0,0,0,.34);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1100px 560px at 82% -8%, #15203a 0%, transparent 60%),
+      radial-gradient(820px 460px at -8% 0%, #161a2e 0%, transparent 55%),
+      var(--bg);
+    color:var(--txt); line-height:1.45;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);text-decoration:none;}
+
+  .proto-banner{
+    background:repeating-linear-gradient(45deg,#2a1d3a,#2a1d3a 12px,#261a35 12px,#261a35 24px);
+    color:#d9c8f5; font-size:12.5px; text-align:center; padding:7px 12px; border-bottom:1px solid #3a2a55;
+  }
+  .proto-banner b{color:#fff;}
+
+  /* ===== shell ===== */
+  .app{display:grid; grid-template-columns:228px 1fr; min-height:100vh;}
+  .side{
+    border-right:1px solid var(--line); background:linear-gradient(180deg,#0e1320,#0c1018);
+    padding:16px 12px; position:sticky; top:0; height:100vh; overflow:auto;
+  }
+  .brand{display:flex; align-items:center; gap:10px; padding:6px 8px 14px;}
+  .brand .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#7c4dff);
+    display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px;box-shadow:0 4px 14px rgba(79,140,255,.4);}
+  .brand b{font-size:14.5px;}
+  .brand small{display:block;color:var(--txt-faint);font-size:10.5px;font-weight:500;letter-spacing:.3px;}
+
+  .nav-group{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--txt-faint);margin:14px 8px 6px;}
+  .nav a{
+    display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px;
+    color:var(--txt-dim); font-size:13px; font-weight:600; cursor:pointer; margin-bottom:2px;
+  }
+  .nav a .ni{width:18px;text-align:center;font-size:13px;}
+  .nav a .nstat{margin-left:auto;width:8px;height:8px;border-radius:50%;}
+  .nav a:hover{background:var(--panel);}
+  .nav a.active{background:var(--accent-soft);color:#cfe0ff;box-shadow:inset 0 0 0 1px #2f4b80;}
+  .nstat.s-ready{background:var(--ready);} .nstat.s-warn{background:var(--warn);}
+  .nstat.s-block{background:var(--block);} .nstat.s-idle{background:var(--idle);}
+
+  .main{min-width:0;}
+  /* context bar */
+  .ctxbar{
+    position:sticky; top:0; z-index:9; display:flex; align-items:center; gap:14px;
+    padding:12px 26px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(11,15,23,.92),rgba(11,15,23,.78)); backdrop-filter:blur(8px);
+  }
+  .slate-chip{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:6px 12px;}
+  .slate-chip label{font-size:10px;color:var(--txt-faint);text-transform:uppercase;letter-spacing:.6px;}
+  .slate-chip select{background:transparent;color:var(--txt);border:none;font-size:13.5px;font-weight:700;outline:none;cursor:pointer;}
+  .slate-chip select option{background:var(--panel-2);}
+  .ctx-spacer{flex:1;}
+  .mini-ready{display:flex;align-items:center;gap:8px;color:var(--txt-dim);font-size:12px;}
+  .mini-ready .bar{width:120px;height:7px;border-radius:99px;background:var(--line-soft);overflow:hidden;}
+  .mini-ready .bar i{display:block;height:100%;background:var(--warn);width:62%;}
+  .gatepill{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px;padding:7px 13px;border-radius:999px;border:1px solid currentColor;}
+  .gatepill .dot{width:9px;height:9px;border-radius:50%;background:currentColor;}
+  .gatepill.s-ready{color:var(--ready);background:var(--ready-bg);}
+  .gatepill.s-warn{color:var(--warn);background:var(--warn-bg);}
+  .gatepill.s-block{color:var(--block);background:var(--block-bg);}
+
+  .page{padding:22px 26px 64px; max-width:1180px;}
+  .page[hidden]{display:none;}
+
+  /* page header pattern */
+  .breadcrumb{font-size:12px;color:var(--txt-faint);margin-bottom:6px;}
+  .breadcrumb b{color:var(--txt-dim);}
+  .ph-title{font-size:24px;font-weight:800;letter-spacing:-.3px;margin:0;}
+  .ph-sub{color:var(--txt-dim);font-size:13.5px;margin:5px 0 0;max-width:74ch;}
+  .ph-row{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;}
+
+  /* banners */
+  .banner{display:flex;gap:12px;align-items:flex-start;border-radius:12px;padding:13px 16px;margin:16px 0;
+    border:1px solid var(--line);background:var(--panel);}
+  .banner .bi{font-size:18px;line-height:1.3;}
+  .banner .bt{font-weight:700;font-size:14px;margin-bottom:2px;}
+  .banner .bd{color:var(--txt-dim);font-size:13px;}
+  .banner .bd b{color:var(--txt);}
+  .banner.ready{border-color:rgba(52,211,153,.4);background:linear-gradient(0deg,var(--ready-bg),transparent),var(--panel);}
+  .banner.warn{border-color:rgba(251,191,36,.4);background:linear-gradient(0deg,var(--warn-bg),transparent),var(--panel);}
+  .banner.block{border-color:rgba(248,113,113,.45);background:linear-gradient(0deg,var(--block-bg),transparent),var(--panel);}
+  .banner.info{border-color:rgba(96,165,250,.4);background:linear-gradient(0deg,var(--info-bg),transparent),var(--panel);}
+  .banner .nextstep{margin-top:7px;font-size:12.5px;}
+  .banner .nextstep .pillbtn{margin-left:8px;}
+
+  .pillbtn{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;font-weight:700;
+    font-size:12.5px;padding:7px 13px;border-radius:9px;border:none;cursor:pointer;box-shadow:0 5px 14px rgba(79,140,255,.3);}
+  .pillbtn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line);box-shadow:none;}
+  .pillbtn.sm{padding:4px 10px;font-size:11.5px;}
+
+  .sect{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--txt-faint);
+    display:flex;align-items:center;gap:10px;margin:26px 2px 12px;}
+  .sect .rule{flex:1;height:1px;background:var(--line-soft);}
+
+  /* mini stepper */
+  .stepper{display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;flex-wrap:wrap;}
+  .mstep{display:flex;align-items:center;gap:8px;padding:5px 11px;border-radius:99px;font-size:12px;color:var(--txt-dim);border:1px solid transparent;}
+  .mstep .mn{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;border:2px solid var(--line);background:var(--idle-bg);}
+  .mstep.s-ready .mn{border-color:var(--ready);color:var(--ready);background:var(--ready-bg);}
+  .mstep.s-warn .mn{border-color:var(--warn);color:var(--warn);background:var(--warn-bg);}
+  .mstep.s-block .mn{border-color:var(--block);color:var(--block);background:var(--block-bg);}
+  .mstep.cur{border-color:var(--accent);background:var(--accent-soft);color:#cfe0ff;}
+
+  /* cards */
+  .grid{display:grid;gap:12px;}
+  .grid.c3{grid-template-columns:repeat(3,1fr);}
+  .grid.c4{grid-template-columns:repeat(4,1fr);}
+  .grid.c2{grid-template-columns:repeat(2,1fr);}
+  .card{border:1px solid var(--line);border-left:3px solid var(--idle);border-radius:13px;padding:14px 15px;background:var(--panel);}
+  .card.ready{border-left-color:var(--ready);} .card.warn{border-left-color:var(--warn);}
+  .card.block{border-left-color:var(--block);} .card.idle{border-left-color:var(--idle);} .card.info{border-left-color:var(--info);}
+  .card .ch{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+  .card .ct{font-size:13px;font-weight:700;}
+  .card .ck{font-size:10px;color:var(--txt-faint);margin-top:2px;font-family:ui-monospace,Menlo,monospace;}
+  .card .cm{font-size:20px;font-weight:800;margin:9px 0 2px;letter-spacing:-.4px;}
+  .card .cmsg{font-size:12px;color:var(--txt-dim);min-height:30px;}
+  .card .cf{margin-top:9px;font-size:11px;color:var(--accent);}
+  .badge{font-size:10px;font-weight:800;letter-spacing:.4px;padding:3px 8px;border-radius:999px;text-transform:uppercase;white-space:nowrap;}
+  .badge.ready{background:var(--ready-bg);color:var(--ready);} .badge.warn{background:var(--warn-bg);color:var(--warn);}
+  .badge.block{background:var(--block-bg);color:var(--block);} .badge.idle{background:var(--idle-bg);color:var(--txt-dim);}
+  .badge.info{background:var(--info-bg);color:var(--info);}
+
+  .panel{border:1px solid var(--line);border-radius:13px;background:var(--panel);padding:16px 18px;}
+  .panel h4{margin:0 0 4px;font-size:14px;}
+  .panel .psub{color:var(--txt-faint);font-size:12px;margin-bottom:12px;}
+
+  /* status table */
+  table.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+  table.tbl th{text-align:left;color:var(--txt-faint);font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+    padding:9px 12px;border-bottom:1px solid var(--line);font-weight:700;}
+  table.tbl td{padding:11px 12px;border-bottom:1px solid var(--line-soft);}
+  table.tbl tr:hover td{background:var(--panel-2);}
+  table.tbl tr:last-child td{border-bottom:none;}
+  .scell{display:inline-flex;align-items:center;gap:7px;font-weight:600;}
+  .sdot{width:8px;height:8px;border-radius:50%;}
+  .sdot.ready{background:var(--ready);} .sdot.warn{background:var(--warn);} .sdot.block{background:var(--block);} .sdot.idle{background:var(--idle);}
+  .mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--txt-dim);}
+  .tbl-wrap{border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--panel);}
+  .tbl-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--line);}
+  .tbl-head .tt{font-weight:700;font-size:14px;}
+  .tbl-head .ts{color:var(--txt-faint);font-size:12px;}
+
+  /* callout */
+  .callout{border:1px dashed var(--line);border-radius:12px;padding:14px 16px;background:var(--panel-3);color:var(--txt-dim);font-size:13px;}
+  .callout b{color:var(--txt);}
+
+  .kpis{display:flex;gap:10px;flex-wrap:wrap;}
+  .kpi{border:1px solid var(--line);border-radius:11px;padding:11px 15px;background:var(--panel);min-width:120px;}
+  .kpi .kv{font-size:22px;font-weight:800;letter-spacing:-.5px;}
+  .kpi .kl{font-size:11px;color:var(--txt-faint);text-transform:uppercase;letter-spacing:.5px;margin-top:1px;}
+
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:7px;background:var(--accent-soft);color:#cfe0ff;border:1px solid #2f4b80;}
+  .muted{color:var(--txt-faint);font-size:12px;}
+
+  /* expander */
+  details.exp{border:1px solid var(--line);border-radius:12px;background:var(--panel-3);overflow:hidden;margin-top:12px;}
+  details.exp>summary{cursor:pointer;list-style:none;padding:13px 16px;font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:9px;}
+  details.exp>summary::-webkit-details-marker{display:none;}
+  details.exp>summary .chev{margin-left:auto;color:var(--txt-faint);transition:.2s;}
+  details.exp[open]>summary .chev{transform:rotate(90deg);}
+  details.exp .expbody{padding:0 16px 16px;}
+
+  code{background:#0e1422;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px;color:#cfe0ff;}
+  .notes h3{font-size:14px;margin:18px 0 6px;}
+  .notes li,.notes p{color:var(--txt-dim);font-size:13px;}
+
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr;}
+    .side{position:relative;height:auto;display:none;}
+    .grid.c3,.grid.c4{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<div class="proto-banner"><b>PROTOTYPE — fake data.</b> App-wide visual design playground. Not connected to anything; changes nothing in the production app.</div>
+
+<div class="app">
+  <!-- ===== sidebar nav ===== -->
+  <aside class="side">
+    <div class="brand">
+      <div class="logo">DK</div>
+      <div><b>Lineup Lab</b><small>UFC DK Classic</small></div>
+    </div>
+    <div class="nav-group">Build workflow</div>
+    <nav class="nav" id="nav">
+      <a data-page="home" class="active"><span class="ni">🛰️</span> Command Center</a>
+      <a data-page="fightgroups"><span class="ni">🥊</span> Fight Groups <span class="nstat s-warn"></span></a>
+      <a data-page="odds"><span class="ni">📊</span> Odds <span class="nstat s-block"></span></a>
+      <a data-page="odds"><span class="ni">📈</span> Projections <span class="nstat s-idle"></span></a>
+      <a data-page="home"><span class="ni">🚨</span> Alerts <span class="nstat s-warn"></span></a>
+      <a data-page="home"><span class="ni">🩺</span> Fighter Status <span class="nstat s-ready"></span></a>
+      <a data-page="home"><span class="ni">✅</span> Manual Review <span class="nstat s-idle"></span></a>
+      <a data-page="home"><span class="ni">⚙️</span> Optimizer <span class="nstat s-idle"></span></a>
+      <a data-page="home"><span class="ni">📤</span> Export & Run Log <span class="nstat s-idle"></span></a>
+    </nav>
+    <div class="nav-group">Reference</div>
+    <nav class="nav">
+      <a data-page="components"><span class="ni">🎨</span> Component system</a>
+      <a data-page="porting"><span class="ni">🔌</span> Porting notes</a>
+    </nav>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <div class="main">
+    <!-- persistent context bar -->
+    <div class="ctxbar">
+      <div class="slate-chip">
+        <label>Active slate</label>
+        <select>
+          <option>#7 — UFC 312: Jones vs. Aspinall</option>
+          <option>#6 — Fight Night: Blanchfield vs. Fiorot</option>
+        </select>
+      </div>
+      <div class="ctx-spacer"></div>
+      <div class="mini-ready" title="Workflow steps ready"><span>Readiness</span><span class="bar"><i></i></span><span>5 / 9</span></div>
+      <div class="gatepill s-block"><span class="dot"></span> Gate closed · blocked</div>
+    </div>
+
+    <!-- ================= HOME ================= -->
+    <section class="page" id="page-home">
+      <div class="breadcrumb">Lineup Lab ▸ <b>Command Center</b></div>
+      <div class="ph-row">
+        <div>
+          <h1 class="ph-title">Command Center</h1>
+          <p class="ph-sub">Where this slate is in the build, what's blocked, and the single next action. (This screen already ships — shown here for continuity with the new shell.)</p>
+        </div>
+        <button class="pillbtn ghost">Open full checklist</button>
+      </div>
+
+      <div class="banner block">
+        <div class="bi">⛔</div>
+        <div style="flex:1">
+          <div class="bt">Fight card not ready — blocked at Odds</div>
+          <div class="bd">12 of 26 active fighters have no matched moneyline, so 12 are non-projectable. Salary &amp; pairing are done.</div>
+          <div class="nextstep"><span class="tag">Next</span> Match the odds feed
+            <button class="pillbtn sm">Go to Odds →</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sect">Build pipeline <span class="rule"></span></div>
+      <div class="stepper">
+        <div class="mstep s-ready"><span class="mn">✓</span> 01 Slate</div>
+        <div class="mstep s-ready"><span class="mn">✓</span> 02 Fight Groups</div>
+        <div class="mstep cur s-block"><span class="mn">⛔</span> 03 Odds</div>
+        <div class="mstep s-block"><span class="mn">!</span> 09 Projections</div>
+        <div class="mstep s-warn"><span class="mn">⚠</span> 05 Alerts</div>
+        <div class="mstep"><span class="mn">4</span> 04 Fighter Status</div>
+        <div class="mstep"><span class="mn">6</span> 06 Manual Review</div>
+        <div class="mstep"><span class="mn">7</span> 07 Optimizer</div>
+        <div class="mstep"><span class="mn">8</span> 08 Export</div>
+      </div>
+
+      <div class="sect">Slate signals <span class="rule"></span></div>
+      <div class="grid c3">
+        <div class="card ready"><div class="ch"><div><div class="ct">Salary import</div><div class="ck">salary_imported</div></div><span class="badge ready">Ready</span></div><div class="cm">26 rows</div><div class="cmsg">DK salary CSV imported and validated.</div><div class="cf">Slate Setup →</div></div>
+        <div class="card ready"><div class="ch"><div><div class="ct">Fight card / pairing</div><div class="ck">fight_group_coverage</div></div><span class="badge ready">Ready</span></div><div class="cm">13 groups</div><div class="cmsg">All active fighters paired.</div><div class="cf">Fight Groups →</div></div>
+        <div class="card block"><div class="ch"><div><div class="ct">Odds match</div><div class="ck">odds_unmatched_active</div></div><span class="badge block">Blocked</span></div><div class="cm">12 unmatched</div><div class="cmsg">14 / 26 matched; 12 active fighters have no moneyline.</div><div class="cf">Odds →</div></div>
+        <div class="card block"><div class="ch"><div><div class="ct">Projection readiness</div><div class="ck">projection_non_projectable</div></div><span class="badge block">Blocked</span></div><div class="cm">12 blocked</div><div class="cmsg">Non-projectable — missing odds upstream.</div><div class="cf">Projections →</div></div>
+        <div class="card warn"><div class="ch"><div><div class="ct">Mismatch alerts</div><div class="ck">mismatch_alerts_warn</div></div><span class="badge warn">Warning</span></div><div class="cm">3 alerts</div><div class="cmsg">Odds↔salary disagreements worth a look.</div><div class="cf">Alerts →</div></div>
+        <div class="card idle"><div class="ch"><div><div class="ct">Manual Review gate</div><div class="ck">manual_review_user_ack</div></div><span class="badge idle">Not started</span></div><div class="cm">Not reviewed</div><div class="cmsg">Resolve blockers before marking reviewed.</div><div class="cf">Manual Review →</div></div>
+      </div>
+      <div class="callout" style="margin-top:14px">This page is intentionally close to what already ships. The redesign work below is the <b>inner pages</b> + the shared <b>shell</b> that wraps all of them.</div>
+    </section>
+
+    <!-- ================= FIGHT GROUPS ================= -->
+    <section class="page" id="page-fightgroups" hidden>
+      <div class="breadcrumb">Lineup Lab ▸ Build workflow ▸ <b>Fight Groups</b></div>
+      <div class="ph-row">
+        <div>
+          <h1 class="ph-title">Fight Groups</h1>
+          <p class="ph-sub">Build and confirm the fight card. Apply DK Game Info suggestions first; use manual tools only as a backup.</p>
+        </div>
+        <button class="pillbtn ghost">Why this matters</button>
+      </div>
+
+      <div class="banner warn">
+        <div class="bi">⚠️</div>
+        <div style="flex:1">
+          <div class="bt">Fight card in progress</div>
+          <div class="bd"><b>Active 26</b> · Grouped 24 · Ungrouped 2 · Groups 12 · Confirmed 11 · 5-round 1</div>
+          <div class="nextstep"><span class="tag">Next</span> Apply 1 DK Game Info suggestion, then confirm 1 group.</div>
+        </div>
+      </div>
+
+      <div class="sect">Suggested DK pairings <span class="rule"></span></div>
+      <div class="tbl-wrap">
+        <div class="tbl-head"><div><div class="tt">Imported fight-card suggestions</div><div class="ts">From the DK salary “Game Info” column · read-only until you Apply</div></div>
+          <button class="pillbtn">Apply suggested DK pairings</button></div>
+        <table class="tbl">
+          <thead><tr><th>Fighter 1</th><th>Fighter 2</th><th>Status</th><th>Game Info (reference)</th></tr></thead>
+          <tbody>
+            <tr><td>Tom Aspinall</td><td>Jon Jones</td><td><span class="scell"><span class="sdot ready"></span>ready</span></td><td class="mono">Jones@Aspinall 06/06/2026 10:00PM ET</td></tr>
+            <tr><td>Erin Blanchfield</td><td>Manon Fiorot</td><td><span class="scell"><span class="sdot idle"></span>already grouped</span></td><td class="mono">Blanchfield@Fiorot 06/06/2026 08:00PM ET</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sect">Fight card <span class="rule"></span></div>
+      <div class="kpis" style="margin-bottom:12px">
+        <div class="kpi"><div class="kv">12</div><div class="kl">Total</div></div>
+        <div class="kpi"><div class="kv">11</div><div class="kl">Confirmed</div></div>
+        <div class="kpi"><div class="kv">1</div><div class="kl">Unconfirmed</div></div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Fight</th><th>Fighter 1</th><th>F1 status</th><th>Fighter 2</th><th>F2 status</th><th>Rounds</th><th>Confirmed?</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="mono">#1</td><td>Jon Jones</td><td><span class="scell"><span class="sdot ready"></span>active</span></td><td>Tom Aspinall</td><td><span class="scell"><span class="sdot ready"></span>active</span></td><td><b>5 rd — main event</b></td><td><span class="scell"><span class="sdot warn"></span>unconfirmed</span></td><td><button class="pillbtn sm">Mark confirmed</button></td></tr>
+            <tr><td class="mono">#2</td><td>Erin Blanchfield</td><td><span class="scell"><span class="sdot ready"></span>active</span></td><td>Manon Fiorot</td><td><span class="scell"><span class="sdot warn"></span>short notice</span></td><td>3 rd</td><td><span class="scell"><span class="sdot ready"></span>confirmed</span></td><td><button class="pillbtn sm ghost">Unconfirm</button></td></tr>
+            <tr><td class="mono">#3</td><td>Beneil Dariush</td><td><span class="scell"><span class="sdot ready"></span>active</span></td><td>Renato Moicano</td><td><span class="scell"><span class="sdot ready"></span>active</span></td><td>3 rd</td><td><span class="scell"><span class="sdot ready"></span>confirmed</span></td><td><button class="pillbtn sm ghost">Unconfirm</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <details class="exp">
+        <summary>🛠️ Advanced manual corrections <span class="chev">▸</span></summary>
+        <div class="expbody">
+          <div class="callout">Backup tools for bouts the DK Game Info suggestions can't cover. Prefer the suggestions above; if a bout changes, <b>edit the existing group</b> rather than adding a duplicate. (Manual add form + pasted-card builder live here, collapsed by default.)</div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ================= ODDS ================= -->
+    <section class="page" id="page-odds" hidden>
+      <div class="breadcrumb">Lineup Lab ▸ Build workflow ▸ <b>Odds</b></div>
+      <div class="ph-row">
+        <div>
+          <h1 class="ph-title">Odds</h1>
+          <p class="ph-sub">Import or paste moneylines, match them to DK fighters, and clear the review queue. Implied win probability drives the projection.</p>
+        </div>
+      </div>
+
+      <div class="banner block">
+        <div class="bi">⛔</div>
+        <div style="flex:1">
+          <div class="bt">12 active fighters have no matched moneyline</div>
+          <div class="bd">This is the slate's only blocking issue. Import an odds CSV or add manual lines, then resolve the 3 rows in the review queue.</div>
+        </div>
+      </div>
+
+      <!-- zone progress -->
+      <div class="stepper" style="margin-bottom:4px">
+        <div class="mstep cur"><span class="mn">1</span> Import &amp; preview</div>
+        <div class="mstep"><span class="mn">2</span> Save to slate</div>
+        <div class="mstep s-block"><span class="mn">3</span> Persisted &amp; match queue</div>
+      </div>
+
+      <div class="sect">1 · Inputs &amp; session preview <span class="rule"></span><span class="muted">browser session only — no writes</span></div>
+      <div class="grid c2">
+        <div class="panel"><h4>Upload odds CSV</h4><div class="psub">DK-shaped or Odds API export</div>
+          <div class="callout">⬆️ Drop a <code>.csv</code> here — validated &amp; previewed before anything is saved.</div></div>
+        <div class="panel"><h4>Manual entry</h4><div class="psub">Quick add a single bout's moneylines</div>
+          <div class="callout">Fighter A <code>-220</code> · Fighter B <code>+180</code> — added to the session preview.</div></div>
+      </div>
+
+      <div class="sect">3 · Persisted data &amp; match queue <span class="rule"></span></div>
+      <div class="kpis" style="margin-bottom:12px">
+        <div class="kpi"><div class="kv">14</div><div class="kl">Matched</div></div>
+        <div class="kpi"><div class="kv">12</div><div class="kl">Unmatched</div></div>
+        <div class="kpi"><div class="kv">3</div><div class="kl">Review queue</div></div>
+        <div class="kpi"><div class="kv">54%</div><div class="kl">Coverage</div></div>
+      </div>
+      <div class="tbl-wrap">
+        <div class="tbl-head"><div><div class="tt">Name-match review queue</div><div class="ts">Confirm or reject low-confidence matches · explicit action only</div></div>
+          <button class="pillbtn ghost">Recompute matches</button></div>
+        <table class="tbl">
+          <thead><tr><th>Odds name</th><th>Suggested DK fighter</th><th>Confidence</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>J. Jones</td><td>Jon Jones</td><td><span class="scell"><span class="sdot ready"></span>high (0.96)</span></td><td>auto-matched</td><td><button class="pillbtn sm ghost">Reject</button></td></tr>
+            <tr><td>Aspinall T</td><td>Tom Aspinall</td><td><span class="scell"><span class="sdot warn"></span>review (0.71)</span></td><td>needs review</td><td><button class="pillbtn sm">Confirm</button></td></tr>
+            <tr><td>R. Moicano</td><td>— no candidate —</td><td><span class="scell"><span class="sdot block"></span>none</span></td><td>unmatched</td><td><button class="pillbtn sm ghost">Manual link</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout" style="margin-top:12px">Status cells make the queue scannable: <b>green</b> auto-matched, <b>amber</b> needs review, <b>red</b> unmatched. The current page dumps this as a flat dataframe.</div>
+    </section>
+
+    <!-- ================= COMPONENTS ================= -->
+    <section class="page" id="page-components" hidden>
+      <div class="breadcrumb">Lineup Lab ▸ Reference ▸ <b>Component system</b></div>
+      <h1 class="ph-title">Component system</h1>
+      <p class="ph-sub">The shared primitives every page is built from — one palette, one set of states (ready / warning / blocked / not-started / info).</p>
+
+      <div class="sect">Banners <span class="rule"></span></div>
+      <div class="banner ready"><div class="bi">✅</div><div><div class="bt">Ready</div><div class="bd">Clean &amp; complete — proceed to the next step.</div></div></div>
+      <div class="banner warn"><div class="bi">⚠️</div><div><div class="bt">Warning</div><div class="bd">Worth a glance but not blocking.</div></div></div>
+      <div class="banner block"><div class="bi">⛔</div><div><div class="bt">Blocked</div><div class="bd">Must be resolved before the gate opens.</div></div></div>
+      <div class="banner info"><div class="bi">ℹ️</div><div><div class="bt">Info</div><div class="bd">Context only — no action required.</div></div></div>
+
+      <div class="sect">Status cards <span class="rule"></span></div>
+      <div class="grid c4">
+        <div class="card ready"><div class="ch"><div class="ct">Ready</div><span class="badge ready">Ready</span></div><div class="cm">26 / 26</div><div class="cmsg">All good.</div></div>
+        <div class="card warn"><div class="ch"><div class="ct">Warning</div><span class="badge warn">Warning</span></div><div class="cm">3 alerts</div><div class="cmsg">Review suggested.</div></div>
+        <div class="card block"><div class="ch"><div class="ct">Blocked</div><span class="badge block">Blocked</span></div><div class="cm">12 left</div><div class="cmsg">Action required.</div></div>
+        <div class="card idle"><div class="ch"><div class="ct">Not started</div><span class="badge idle">Not started</span></div><div class="cm">Locked</div><div class="cmsg">Upstream pending.</div></div>
+      </div>
+
+      <div class="sect">Badges, tags, buttons <span class="rule"></span></div>
+      <div class="panel" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <span class="badge ready">Ready</span><span class="badge warn">Warning</span><span class="badge block">Blocked</span>
+        <span class="badge idle">Not started</span><span class="badge info">Info</span>
+        <span class="tag">Next</span>
+        <button class="pillbtn">Primary</button><button class="pillbtn ghost">Ghost</button><button class="pillbtn sm">Small</button>
+      </div>
+
+      <div class="sect">Status table cells <span class="rule"></span></div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Item</th><th>Status</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Row A</td><td><span class="scell"><span class="sdot ready"></span>ready</span></td><td class="mono">ok</td></tr>
+          <tr><td>Row B</td><td><span class="scell"><span class="sdot warn"></span>review</span></td><td class="mono">0.71</td></tr>
+          <tr><td>Row C</td><td><span class="scell"><span class="sdot block"></span>blocked</span></td><td class="mono">none</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="sect">Mini stepper <span class="rule"></span></div>
+      <div class="stepper">
+        <div class="mstep s-ready"><span class="mn">✓</span> Done</div>
+        <div class="mstep cur s-block"><span class="mn">⛔</span> Current</div>
+        <div class="mstep"><span class="mn">3</span> Upcoming</div>
+      </div>
+    </section>
+
+    <!-- ================= PORTING ================= -->
+    <section class="page notes" id="page-porting" hidden>
+      <div class="breadcrumb">Lineup Lab ▸ Reference ▸ <b>Porting notes</b></div>
+      <h1 class="ph-title">Porting this into Streamlit</h1>
+      <p class="ph-sub">This v2 prototype is a view-layer exploration. Everything maps to data the app already computes; no new business logic, schema, or page-load writes are implied.</p>
+
+      <h3>1. The shell (biggest usability win, lowest logic risk)</h3>
+      <ul>
+        <li><b>Persistent context bar</b> (slate chip + gate pill + readiness mini): render once via a tiny helper imported at the top of each page, fed by <code>evaluate_manual_review(conn, st.session_state["active_slate_id"])</code>. Streamlit's native sidebar already gives the left nav; the status dots beside each page would be a small bonus (one readiness read shared via <code>st.session_state</code> or a cached call).</li>
+        <li><b>Page header pattern</b>: a shared <code>render_page_header(title, subtitle, banner)</code> helper so every page opens with breadcrumb ▸ title ▸ purpose ▸ contextual banner ▸ next-step hint. Today each page rolls its own intro.</li>
+      </ul>
+
+      <h3>2. Components → Streamlit primitives</h3>
+      <ul>
+        <li>Banners → <code>st.success / st.warning / st.error / st.info</code> (native) or the small CSS banner if a richer look is wanted.</li>
+        <li>Status cards → <code>st.columns</code> + <code>st.container(border=True)</code> + <code>st.metric</code> + a CSS status chip.</li>
+        <li>Status tables → the existing dataframes gain a status column; for per-row action buttons keep the column-of-<code>st.columns</code> pattern already used by the Fight Groups fight-card table and the Odds review queue.</li>
+        <li>Stepper → a row of small <code>st.columns</code> with an icon per step (pure markdown).</li>
+        <li>One shared CSS block injected once per page via <code>st.markdown(unsafe_allow_html=True)</code> (scoped <code>llc-</code>/<code>ll-</code> classes — never Streamlit globals), exactly as the shipped home does.</li>
+      </ul>
+
+      <h3>3. Suggested order (each its own reviewed slice)</h3>
+      <ul>
+        <li><b>S1 — shared theme module</b>: extract the home's CSS tokens into one helper (e.g. <code>app/_ui.py</code>) both home and pages import. No visible change beyond consistency.</li>
+        <li><b>S2 — page-header helper</b>: adopt on 1 page (Fight Groups) behind its AppTest, then roll out page by page.</li>
+        <li><b>S3 — Odds review queue</b>: status-cell styling on the existing match table.</li>
+        <li><b>S4 — context bar</b>: opt-in per page, reusing the global <code>active_slate_id</code> already written by home.</li>
+      </ul>
+
+      <h3>4. Constraints carried over (unchanged)</h3>
+      <ul>
+        <li>Read-only on load; no INSERT/UPDATE/DELETE on render (docs/DEVELOPMENT_NOTES.md §11).</li>
+        <li>No optimizer run / export build / odds recompute on load — buttons stay explicit.</li>
+        <li>Render existing check <code>status</code>; never re-derive verdicts. No <code>effective_status</code> promotion.</li>
+        <li>Each slice ships with its AppTest; copy/label strings pinned by tests are updated in lock-step.</li>
+      </ul>
+      <p class="muted" style="margin-top:16px">Prototype file: <code>docs/ui_prototypes/app_shell_and_components_v2.html</code> · fake data · safe to delete.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+  const nav = document.getElementById("nav");
+  function show(page){
+    document.querySelectorAll(".page").forEach(p => p.hidden = (p.id !== "page-"+page));
+    document.querySelectorAll("#nav a, .nav a").forEach(a => a.classList.toggle("active", a.dataset.page===page));
+    window.scrollTo({top:0, behavior:"smooth"});
+  }
+  document.querySelectorAll(".nav a").forEach(a=>{
+    a.addEventListener("click", e=>{ e.preventDefault(); show(a.dataset.page); });
+  });
+</script>
+</body>
+</html>

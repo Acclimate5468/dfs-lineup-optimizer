@@ -1,0 +1,49 @@
+<!--
+  Minimal hand-written fixture mirroring the BestFightOdds event odds-table
+  shape: a header row of per-book columns (DraftKings + one other book to be
+  ignored) and per-fighter data rows whose first cell is the fighter name and
+  whose per-book cells hold an American moneyline span.
+
+  This is NOT a copied page dump (docs/DEVELOPMENT_NOTES.md §7 / ODDS_ACQUISITION_V0_DESIGN.md):
+  it is a structural representative with invented fighters and lines, kept just
+  large enough to exercise the parser:
+    - two fighters with valid DraftKings lines (one favorite, one underdog),
+    - a non-DraftKings book column that must be ignored,
+    - a second fight whose DraftKings cells are blank (book has no line) to
+      exercise the skip-blank-cell path.
+-->
+<html>
+  <body>
+    <table class="odds-table">
+      <thead>
+        <tr>
+          <th class="prop-cell">Event</th>
+          <th class="book-header"><a title="DraftKings"><img alt="DraftKings" /></a></th>
+          <th class="book-header"><a title="BetMGM"><img alt="BetMGM" /></a></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="fighter-cell"><a href="/fighters/Test-Fighter-One-0001">Test Fighter One</a></td>
+          <td><span class="oddsnumber">-350</span></td>
+          <td><span class="oddsnumber">-330</span></td>
+        </tr>
+        <tr>
+          <td class="fighter-cell"><a href="/fighters/Test-Fighter-Two-0002">Test Fighter Two</a></td>
+          <td><span class="oddsnumber">+280</span></td>
+          <td><span class="oddsnumber">+270</span></td>
+        </tr>
+        <tr>
+          <td class="fighter-cell"><a href="/fighters/Test-Fighter-Three-0003">Test Fighter Three</a></td>
+          <td><span class="oddsnumber"></span></td>
+          <td><span class="oddsnumber">-145</span></td>
+        </tr>
+        <tr>
+          <td class="fighter-cell"><a href="/fighters/Test-Fighter-Four-0004">Test Fighter Four</a></td>
+          <td><span class="oddsnumber"></span></td>
+          <td><span class="oddsnumber">+125</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>

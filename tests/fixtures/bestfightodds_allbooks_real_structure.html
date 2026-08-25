@@ -1,0 +1,110 @@
+<!--
+  Sanitized, structure-faithful fixture for the ALL-BOOKS consensus parser's
+  REAL-FEED hardening (ODDS_CONSENSUS_DESIGN.md §10.7).
+
+  This is NOT a copied page dump (docs/DEVELOPMENT_NOTES.md §7): it is a hand-written structural
+  representative with INVENTED fighters and lines that reproduces the markup
+  shape a real BestFightOdds event table uses — the shape the original synthetic
+  fixture (bestfightodds_allbooks_sample.html) omitted, which is exactly why the
+  slice-7 real-feed run failed (617 rows, props read as fighters, "43417Belal
+  Muhammad" names, 1-3 books). It reproduces:
+
+    - the name cell as a <th scope="row"> holding a rotation/pictureid anchor
+      ("9001") FOLLOWED by the real fighter anchor (/fighters/...) whose name is
+      in a <span> — so the flattened cell text is "9001Aiden Stone";
+    - odds cells as <td class="but-sg"> with a value <span id="oID..."> and a
+      trailing up/down movement-arrow <span> ("-150▲");
+    - book columns whose headers carry promo suffixes ("Polymarket $50 Bonus",
+      "Kalshi $10 Free");
+    - a DraftKings column that is present in the header (the grid anchor) but
+      whose VALUES are server-empty for some fighters (BFO loads DraftKings /
+      BetMGM client-side) and present for others — the parser must read it when
+      present and simply skip it when blank;
+    - a trailing "Props" count cell that is NOT a book line;
+    - a matchup-header row and several round-total / method prop rows
+      ("Under 1½ rounds", "Aiden Stone wins by KO/TKO") whose leading cell has
+      NO /fighters/ link — these must be excluded.
+
+  Two fights (four fighters) so opponent pairing is exercised.
+-->
+<html>
+  <body>
+    <table class="odds-table">
+      <thead>
+        <tr class="pr">
+          <th></th>
+          <th class="b-h"><a title="Polymarket $50 Bonus"><img alt="Polymarket $50 Bonus" /></a></th>
+          <th class="b-h"><a title="Kalshi $10 Free"><img alt="Kalshi $10 Free" /></a></th>
+          <th class="b-h"><a title="FanDuel"><img alt="FanDuel" /></a></th>
+          <th class="b-h"><a title="Caesars"><img alt="Caesars" /></a></th>
+          <th class="b-h"><a title="BetMGM"><img alt="BetMGM" /></a></th>
+          <th class="b-h"><a title="DraftKings"><img alt="DraftKings" /></a></th>
+          <th class="b-h">Props</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="pr">
+          <th scope="row"><a href="/cnadm/matchups/9001">Matchup</a></th>
+          <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+        </tr>
+        <tr class="pr">
+          <th scope="row"><a href="/p 9001">9001</a><a href="/fighters/Aiden-Stone-1111"><span class="t-b-fcc">Aiden Stone</span></a></th>
+          <td class="but-sg"><span id="oID1">-150</span><span class="aru arage-1">&#9650;</span></td>
+          <td class="but-sg"><span id="oID2">-145</span><span class="aru arage-2">&#9660;</span></td>
+          <td class="but-sg"><span id="oID3">-160</span></td>
+          <td class="but-sg"><span id="oID4">-152</span></td>
+          <td class="but-sg"></td>
+          <td class="but-sg"></td>
+          <td>92</td>
+        </tr>
+        <tr class="pr">
+          <th scope="row"><a href="/p 9002">9002</a><a href="/fighters/Brody-Vance-2222"><span class="t-b-fcc">Brody Vance</span></a></th>
+          <td class="but-sg"><span id="oID5">+130</span><span class="aru arage-1">&#9650;</span></td>
+          <td class="but-sg"><span id="oID6">+125</span></td>
+          <td class="but-sg"><span id="oID7">+140</span></td>
+          <td class="but-sg"><span id="oID8">+132</span></td>
+          <td class="but-sg"></td>
+          <td class="but-sg"></td>
+          <td>88</td>
+        </tr>
+        <tr class="pr">
+          <th scope="row">Under 1&#189; rounds Over 1&#189; rounds</th>
+          <td class="but-sg"><span id="oID9">-590</span></td>
+          <td class="but-sg"><span id="oID10">+350</span></td>
+          <td></td><td></td><td></td><td></td><td></td>
+        </tr>
+        <tr class="pr">
+          <th scope="row">Aiden Stone wins by KO/TKO</th>
+          <td class="but-sg"><span id="oID11">+200</span></td>
+          <td></td><td></td><td></td><td></td><td></td><td></td>
+        </tr>
+        <tr class="pr">
+          <th scope="row"><a href="/p 9003">9003</a><a href="/fighters/Cole-Reyes-3333"><span class="t-b-fcc">Cole Reyes</span></a></th>
+          <td class="but-sg"><span id="oID12">-200</span><span class="aru arage-1">&#9650;</span></td>
+          <td class="but-sg"><span id="oID13">-210</span></td>
+          <td class="but-sg"><span id="oID14">-195</span></td>
+          <td class="but-sg"><span id="oID15">-205</span></td>
+          <td class="but-sg"><span id="oID16">-198</span></td>
+          <td class="but-sg"><span id="oID17">-202</span></td>
+          <td>77</td>
+        </tr>
+        <tr class="pr">
+          <th scope="row"><a href="/p 9004">9004</a><a href="/fighters/Diego-Marsh-4444"><span class="t-b-fcc">Diego Marsh</span></a></th>
+          <td class="but-sg"><span id="oID18">+170</span></td>
+          <td class="but-sg"><span id="oID19">+175</span></td>
+          <td class="but-sg"><span id="oID20">+168</span></td>
+          <td class="but-sg"><span id="oID21">+172</span></td>
+          <td class="but-sg"><span id="oID22">+169</span></td>
+          <td class="but-sg"><span id="oID23">+171</span></td>
+          <td>70</td>
+        </tr>
+        <tr class="pr">
+          <th scope="row">Over 2&#189; rounds Under 2&#189; rounds</th>
+          <td class="but-sg"><span id="oID24">-305</span></td>
+          <td class="but-sg"><span id="oID25">+210</span></td>
+          <td></td><td></td><td></td><td></td><td></td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>
